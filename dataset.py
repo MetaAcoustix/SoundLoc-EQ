@@ -4,7 +4,7 @@
 @Author: liincuan
 @Description: 
 """
-
+import os
 import torch
 from torch.utils.data import Dataset
 import config
@@ -36,13 +36,15 @@ class PhaseDataset(Dataset):
         x = x.permute((2, 0, 1))  # shape=(frame, mic, freq)
         frames_num = x.shape[0]
 
-        y = torch.zeros(num_srcs, self.reso + 1)
-        for src in range(num_srcs):
+        # y = torch.zeros(num_srcs, self.reso + 1)
+        y = onehot_encoding(loc=doas, reso=self.reso)
+        y = y[:, None, :].expand(-1, frames_num, -1)
+        # for src in range(num_srcs):
             # y[src] = gaussian_encoding(sigma=self.sigma, loc=doas[src], reso=self.reso)
             # y[src] = onehot_encoding(loc=doas[src], reso=self.reso)
             # y[src] = soft_encoding(loc=doas[src], reso=self.reso)
-            y[src] = unbiased_encoding(loc=doas[src], reso=self.reso)
-        y = y.unsqueeze(1).expand(num_srcs, frames_num, self.reso + 1)
+            # y[src] = unbiased_encoding(loc=doas[src], reso=self.reso)
+        # y = y.unsqueeze(1).expand(num_srcs, frames_num, self.reso + 1)
 
         return x, y, doas
 
@@ -61,6 +63,12 @@ class Phase2Dataset(Dataset):
 
     def __getitem__(self, item):
         filepath = self.total_list[item]
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File not found: {filepath}")
+        try:
+            data = torch.load(filepath)
+        except Exception as e:
+            raise ValueError(f"Error loading {filepath}: {e}")
         data = torch.load(filepath)
 
         doas = data['doas']  # shape=(num_srcs)
@@ -76,7 +84,7 @@ class Phase2Dataset(Dataset):
         for src in range(num_srcs):
             # y[src] = gaussian_encoding(sigma=self.sigma, loc=doas[src], reso=self.reso)
             # y[src] = onehot_encoding(loc=doas[src], reso=self.reso)
-            # y[src] = soft_encoding(loc=doas[src], reso=self.reso)
+            y[src] = soft_encoding(loc=doas[src], reso=self.reso)
             y2[src] = unbiased_encoding(loc=doas[src], reso=self.reso)
 
         # return x, y, doas
@@ -134,9 +142,21 @@ class SS2Dataset(Dataset):
 
     def __getitem__(self, item):
         filepath = self.total_list[item]
-        data = torch.load(filepath)
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File not found: {filepath}")
+        try:
+            data = torch.load(filepath)
+        except Exception as e:
+            raise ValueError(f"Error loading {filepath}: {e}")
+        # data = torch.load(filepath)
 
+        if 'stft' not in data or 'doas' not in data:
+            raise KeyError(f"Missing 'stft' or 'doas' in {filepath}")
         doas = data['doas']  # shape=(num_srcs)
+        stft = data['stft'][:, 1:, :]
+        if stft.ndim != 3 or doas.ndim != 1:
+            raise ValueError(f"Invalid shape in {filepath}: stft {stft.shape}, doas {doas.shape}")
+
         num_srcs = doas.shape[0]
         doas, _ = torch.sort(doas, dim=0, descending=True)
 
@@ -146,10 +166,11 @@ class SS2Dataset(Dataset):
         x = x.permute((2, 0, 3, 1))  # (frames_num, channel, frame, freq)
         frames_num = x.shape[0]
 
-        y = torch.zeros(num_srcs, self.reso + 1)
-        for src in range(num_srcs):
+        # y = torch.zeros(num_srcs, self.reso + 1)
+        y = onehot_encoding(loc=doas, reso=self.reso)
+        # for src in range(num_srcs):
             # y[src] = gaussian_encoding(sigma=self.sigma, loc=doas[src], reso=self.reso)
-            y[src] = onehot_encoding(loc=doas[src], reso=self.reso)
+            # y[src] = onehot_encoding(loc=doas[src], reso=self.reso)
             # y[src] = soft_encoding(loc=doas[src], reso=self.reso)
             # y[src] = unbiased_encoding(loc=doas[src], reso=self.reso)
 
@@ -160,7 +181,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
 
-    doas = torch.tensor([92.4])
+    doas = torch.tensor([92.4, 180.0])
     num_srcs = len(doas)
     reso = 180
     y = torch.zeros(num_srcs, reso + 1)
