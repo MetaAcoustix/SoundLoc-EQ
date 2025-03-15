@@ -116,7 +116,7 @@ Detailed logs and checkpoints are available in `./circular/logs/` and `./circula
 
 ## File Structure
 ```
-Unbiased_Label_Distribution/
+SoundLoc-EQ/
 ├── config.py              # Configuration settings
 ├── dataset.py             # Dataset loading and preprocessing
 ├── encoding_decoding.py   # Encoding functions (e.g., onehot_encoding, unbiased_encoding)
